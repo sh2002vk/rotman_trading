@@ -16,5 +16,6 @@ def main():
             print('something went wrong')
 
 
-main()
+if __name__ == '__main__':
+    main()
 
