@@ -214,7 +214,7 @@ def main():
                             re_order(s, volumes_filled, price, action, sells_df)
                             sleep(SPEEDBUMP)
 
-            tick = get_tick(s)
+            tick = get_tick(s)  # update sessions
 
 
 if __name__ == '__main__':
