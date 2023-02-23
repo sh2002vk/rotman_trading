@@ -1,6 +1,7 @@
 import signal
 import requests
 from time import sleep
+import pandas as pd
 import sys
 
 shutdown = False
@@ -48,44 +49,50 @@ def bid_ask(session, ticker):
 
 def get_open_sells(session):
     resp = session.get('http://localhost:9999/v1/orders?status=OPEN')
+    data = []
     if resp.ok:
-        open_vol = 0
-        ids = []
-        prices = []
-        order_vols = []
-        volume_filled = []
-
         orders = resp.json()
         for order in orders:
             if order['action'] == "SELL":
-                volume_filled.append(order['quantity_filled'])
-                order_vols.append(order['quantity'])
-                open_vol += order['quantity']
-                prices.append(order['price'])
-                ids.append(order['order_id'])
+                row = {}
+                row["order_id"] = order["order_id"]
+                row["volume_filled"] = order["quantity_filled"]
+                row["order_vol"] = order["quantity"]
+                row["price"] = order["price"]
+                data.append(row)
 
-    return volume_filled, open_vol, ids, prices, order_vols
+    df = pd.DataFrame(data)
+    open_vol = 0
+    try:
+        open_vol = df["order_vol"].sum()
+    except Exception as e:
+        pass
+
+    return open_vol, df
 
 
 def get_open_buys(session):
     resp = session.get('http://localhost:9999/v1/orders?status=OPEN')
+    data = []
     if resp.ok:
-        open_vol = 0
-        ids = []
-        prices = []
-        order_vols = []
-        volume_filled = []
-
         orders = resp.json()
         for order in orders:
             if order['action'] == "BUY":
-                volume_filled.append(order['quantity_filled'])
-                order_vols.append(order['quantity'])
-                open_vol += order['quantity']
-                prices.append(order['price'])
-                ids.append(order['order_id'])
+                row = {}
+                row["order_id"] = order["order_id"]
+                row["volume_filled"] = order["quantity_filled"]
+                row["order_vol"] = order["quantity"]
+                row["price"] = order["price"]
+                data.append(row)
 
-    return volume_filled, open_vol, ids, prices, order_vols
+    df = pd.DataFrame(data)
+    open_vol = 0
+    try:
+        open_vol = df["order_vol"].sum()
+    except Exception as e:
+        pass
+
+    return open_vol, df
 
 
 def buy_sell(session, sell_price, buy_price):
@@ -116,11 +123,10 @@ def buy_sell(session, sell_price, buy_price):
         raise ApiException(f'buy_sell -> {e}')
 
 
-def re_order(session, num_orders, ids, vols_filled, volumes, price, action):
-    for i in range(num_orders):
-        id = ids[i]
-        volume = volumes[i]
-        vol_filled = vols_filled[i]
+def re_order(session, vols_filled, price, action, df):
+    for i in range(len(df)):
+        vol_filled = df.loc[i, "volume_filled"]
+        volume = df.loc[i, "order_vol"]
 
         if vol_filled != 0:
             volume = MAX_VOLUME - vol_filled
@@ -140,15 +146,9 @@ def re_order(session, num_orders, ids, vols_filled, volumes, price, action):
 
 
 def main():
-    buy_ids = []
-    buy_prices = []
-    buy_volumes = []
     volume_filled_buys = []
     open_buys_volume = 0
 
-    sell_ids = []
-    sell_prices = []
-    sell_volumes = []
     volume_filled_sells = []
     open_sells_volume = 0
 
@@ -160,8 +160,8 @@ def main():
         tick = get_tick(s)
 
         while (tick > 5) and (tick < 295) and not shutdown:
-            volume_sells, open_sells, sell_ids, sell_prices, sell_volumes = get_open_sells(s)
-            volume_buys, open_buys, buy_ids, buy_prices, buy_volumes = get_open_buys(s)
+            open_sells, sells_df = get_open_sells(s)
+            open_buys, buys_df = get_open_buys(s)
             bid, ask = bid_ask(s, 'BULL')
 
             if (open_sells_volume == 0) and (open_buys_volume == 0):
@@ -184,20 +184,17 @@ def main():
                     if buy_price == bid:  # orders at top of block
                         continue
 
-                    elif tick - single_side_transaction_time >= 3:  # threshold should by dynamic
+                    elif tick - single_side_transaction_time >= 3:  # threshold should be dynamic
                         next_buy_price = bid + 0.01
                         potential_profit = sell_price - next_buy_price - 0.02
 
                         if potential_profit >= 0.01 or tick - single_side_transaction_time >= 6:  # Why are  they choosing these random times?
                             action = 'BUY'
-                            order_count = len(buy_ids)
                             buy_price = bid + 0.01
                             price = buy_price
-                            ids = buy_ids
-                            volumes = buy_volumes
                             volumes_filled = volume_filled_buys
 
-                            re_order(s, order_count, ids, volumes_filled, volumes, price, action)
+                            re_order(s, volumes_filled, price, action, buys_df)
                             sleep(SPEEDBUMP)
 
                 elif open_buys_volume == 0:
@@ -210,14 +207,11 @@ def main():
 
                         if potential_profit >= 0.01 or tick - single_side_transaction_time >= 6:  # Why are  they choosing these random times?
                             action = 'SELL'
-                            order_count = len(sell_ids)
                             sell_price = ask - 0.01
                             price = sell_price
-                            ids = sell_ids
-                            volumes = sell_volumes
                             volumes_filled = volume_filled_sells
 
-                            re_order(s, order_count, ids, volumes_filled, volumes, price, action)
+                            re_order(s, volumes_filled, price, action, sells_df)
                             sleep(SPEEDBUMP)
 
             tick = get_tick(s)
