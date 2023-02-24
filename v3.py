@@ -162,9 +162,6 @@ def main(security_name):
             open_buys, buys_df = get_open_buys(s)
             bid, ask = bid_ask(s, security_name)
 
-
-            print(open_buys, open_sells, security_name)
-
             if (open_sells_volume == 0) and (open_buys_volume == 0):
                 # no open orders, so go through with arbitrage
                 single_side_filled = False
@@ -216,6 +213,8 @@ def main(security_name):
                             sleep(SPEEDBUMP)
 
             tick = get_tick(s)  # update sessions
+
+
 
 
 if __name__ == '__main__':
