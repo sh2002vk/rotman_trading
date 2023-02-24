@@ -7,7 +7,7 @@ import sys
 
 shutdown = False
 API_KEY = {'X-API-key': 'LO17Z6GL'}
-securities = ["BULL", "BEAR"];
+securities = ["BULL", "BEAR"]
 security_name = ""
 
 # Spread should be dynamic and we should figure out why we start at 5 secs
